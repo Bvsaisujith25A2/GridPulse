@@ -151,3 +151,144 @@ GridPulse is a standalone cloud-native application. It interacts with smart grid
 ### 6.2 Observability
 
 * **Tracing:** The system shall integrate **Pydantic Logfire** to provide structured application traces from the API entry point to the ML model output.
+
+
+
+
+
+
+
+
+
+
+
+
+
+This is the final, fully integrated **Software Requirements Specification (SRS)**. It combines the **Vertical Construction** (ML/Backend), the **Digital Twin Canvas**, the **Real-Time Spatial Streaming** (WebSockets for positioning), and the **Prosumer/Smart House** logic.
+
+---
+
+# Software Requirements Specification (SRS)
+
+## Project: GridPulse – AI-Driven Smart Grid Digital Twin
+
+**Version:** 1.5 (Real-Time Spatial Sync Edition)
+
+
+
+**Environment:** Localhost (ThinkPad T495s) via Cloudflare Tunnels
+
+---
+
+## 1. Introduction
+
+### 1.1 Purpose
+
+GridPulse is a real-time "Digital Twin" platform for decentralized power networks. It provides a visual interface for grid topology, real-time telemetry streaming, and AI-driven stability forecasting. It allows for bi-directional control, where UI actions (moving nodes, toggling switches) interact directly with a Python-based electrical simulation and ML model.
+
+### 1.2 Scope
+
+The system integrates a **Django/FastAPI** backend with a **React Flow** canvas. Key innovations include auto-layout graph positioning, real-time coordinate streaming via WebSockets, and prosumer energy modeling (Smart Houses).
+
+---
+
+## 2. Overall Description
+
+### 2.1 Product Perspective
+
+GridPulse operates as a high-performance local server. By utilizing **Django Channels**, it treats spatial data (node positions) as telemetry, allowing for a collaborative, low-latency monitoring experience.
+
+### 2.2 Functional Requirements
+
+* **FR-1: Real-Time Spatial Streaming:** Node coordinates ($x, y$) are streamed via WebSockets. Moving a node on one client updates all other clients instantly.
+* **FR-2: Auto-Layout Engine:** On initial load, nodes without fixed coordinates are placed using a Force-Directed Graph algorithm (Dagre/D3).
+* **FR-3: Prosumer Logic (Smart Houses):** Houses act as dynamic nodes with net-metering logic ($P_{net} = P_{solar} - P_{load}$).
+* **FR-4: Telemetry Mocking:** Every node type (Transformer, Plant, Pole) automatically generates real-world electrical mockup data (Voltage, Power, Frequency).
+* **FR-5: AI Stability Prediction:** A GRU-based ANN predicts "Blackout Risk" based on current grid topology and load.
+
+---
+
+## 3. System Architecture (SAD)
+
+The "Vertical Construction" architecture:
+
+1. **Frontend (React + React Flow):** Manages the canvas and captures drag-and-drop events to emit WebSocket messages.
+2. **Backend (Django + Channels):** The "State Coordinator." It manages the PostgreSQL database and broadcasts coordinate/telemetry updates.
+3. **ML Engine (FastAPI + GRU):** The "Brain." It receives 12-parameter telemetry and returns stability indices ($stab$ and $stabf$).
+4. **Simulation Layer (OpenDSSDirect):** Validates the physics of the grid connections created on the canvas.
+
+---
+
+## 4. Entity Relationship Diagram (ERD)
+
+### **4.1 Entity: GridComponent (The Node)**
+
+* `id`: UUID (PK)
+* `type`: ENUM (Plant, Transformer, Station, Substation, Pole, House)
+* `x_pos / y_pos`: Float (Streamed via WebSockets; can be `null` for auto-layout)
+* `status`: ENUM (Stable, Warning, Critical, Offline)
+* `mock_data`: JSONField (Stores current $V, P, f, Q$)
+
+### **4.2 Entity: GridEdge (The Connection)**
+
+* `source`: FK (GridComponent)
+* `target`: FK (GridComponent)
+* `flow_direction`: Integer (1: Forward, -1: Reverse, 0: No Flow)
+* `capacity`: Float (Max kW)
+
+---
+
+## 5. Technical Stack Summary
+
+| Layer | Technology | Role |
+| --- | --- | --- |
+| **Canvas UI** | React Flow + Dagre | Topology visualization & auto-layout. |
+| **Real-Time** | Django Channels + Redis | WebSocket broadcasting of coordinates/metrics. |
+| **Logic/DB** | Django + PostgreSQL | Asset management and "Source of Truth." |
+| **AI Inference** | FastAPI + Keras (GRU) | Stability prediction and recommendation. |
+| **Exhibition** | Cloudflare Tunnels | Exposing localhost for live demos. |
+
+---
+
+## 6. Detailed Component Metrics (Mockup Data)
+
+Every node is initialized with the following real-life metrics:
+
+* **Power Plant:** $P \approx 500MW$, $Q \approx 50MVAr$, $f = 50.0Hz \pm 0.05$.
+* **Substation:** $V_{in} = 132kV$, $V_{out} = 33kV$, Power Factor $\approx 0.9$.
+* **Smart Meter (House):** Consumption $1.5kW - 5.0kW$, Solar Gen $0.0kW - 4.5kW$.
+* **Smart Pole:** Leakage Current $< 5mA$, Ambient Temp $25^\circ C - 45^\circ C$.
+
+---
+
+## 7. Mathematical & Logic Layer
+
+### 7.1 Spatial Sync Logic
+
+Whenever a `nodeDrag` event occurs:
+
+
+$$Event_{emit} = \{id, x, y, timestamp\}$$
+
+
+The Backend ignores any timestamp older than the last processed update to prevent "jitter."
+
+### 7.2 Net Flow Direction
+
+The animation speed and direction of the "Edges" (wires) are determined by:
+
+
+$$Direction = \text{sign}(P_{solar} - P_{load})$$
+
+
+If positive, the edge glows and moves toward the grid; if negative, it moves toward the house.
+
+---
+
+### **Final Deployment Strategy for Demo:**
+
+1. **Start Local Services:** Run Redis, Django, and FastAPI on your ThinkPad.
+2. **Launch Tunnel:** `cloudflared tunnel --url http://localhost:8000`.
+3. **Demonstrate:** Share the generated URL. Move nodes on your laptop; watch them move on the judges' devices in real-time.
+
+
