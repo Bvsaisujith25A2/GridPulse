@@ -147,8 +147,9 @@ class DistributionTransformerAdmin(BaseNodeAdmin):
 # ── Consumers ─────────────────────────────────────────────────────
 @admin.register(House)
 class HouseAdmin(BaseNodeAdmin):
-    list_display = ('name', 'distribution_transformer', 'status', 'output', power_badge)
+    list_display = ('name', 'distribution_transformer', 'status', 'output', 'hardware_enabled', 'arduino_pin', power_badge)
     list_select_related = ('distribution_transformer',)
+    readonly_fields = BaseNodeAdmin.readonly_fields
 
 @admin.register(Industry)
 class IndustryAdmin(BaseNodeAdmin):

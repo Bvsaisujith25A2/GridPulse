@@ -3,6 +3,7 @@ import random
 import time
 from collections import defaultdict
 
+from django.conf import settings
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -16,6 +17,7 @@ from .models import (
 	Industry,
 	PowerPlant,
 )
+from .arduino import sync_house_output
 from .telemetry import record_latest
 
 
@@ -298,6 +300,7 @@ def _build_topology_response():
 
 def _build_stream_payload():
 	node_inputs, node_outputs = _randomize_telemetry()
+	bound_house_ids = {str(house_id) for house_id in House.objects.filter(hardware_enabled=True).values_list("id", flat=True)}
 
 	statuses = {}
 	node_payload = {}
@@ -321,14 +324,18 @@ def _build_stream_payload():
 			persisted_status=node.status if not _is_node_live(node) else None,
 		)
 		statuses[node_id] = status
+		parameters = {
+			"category": meta["label"],
+			"input": f"{input_value:.2f} {meta['unit']}",
+			"output": f"{output_value:.2f} {meta['unit']}",
+			"powerActive": "On" if node.power_active else "Off",
+		}
+		if node.category_id == "CAT-HS":
+			parameters["arduinoLink"] = "Connected" if node_id in bound_house_ids else "Disconnected"
+			parameters["arduinoPort"] = getattr(settings, "ARDUINO_SERIAL_PORT", "") or "Not configured"
 		node_payload[node_id] = {
 			"status": status,
-			"parameters": {
-				"category": meta["label"],
-				"input": f"{input_value:.2f} {meta['unit']}",
-				"output": f"{output_value:.2f} {meta['unit']}",
-				"powerActive": "On" if node.power_active else "Off",
-			},
+			"parameters": parameters,
 		}
 
 	return {"statuses": statuses, "nodes": node_payload, "edges": _build_edge_payload()}
@@ -386,6 +393,51 @@ def grid_node_power(request, node_id):
 	payload["topology"] = _build_topology_response()
 	payload["updatedNodeId"] = str(node.id)
 	payload["requestedState"] = state
+	return _json_cors_response(payload)
+
+
+@csrf_exempt
+def grid_house_arduino_binding(request, node_id):
+	if request.method == "OPTIONS":
+		return _options_cors_response()
+
+	if request.method != "POST":
+		return _json_cors_response({"error": "Method not allowed"}, status=405)
+
+	state = request.GET.get("state")
+	if state not in {"connect", "disconnect"}:
+		return _json_cors_response({"error": "state must be 'connect' or 'disconnect'"}, status=400)
+
+	try:
+		node = _get_concrete_node(str(node_id))
+	except GridNode.DoesNotExist:
+		return _json_cors_response({"error": "Node not found"}, status=404)
+
+	if not isinstance(node, House):
+		return _json_cors_response({"error": "Arduino binding is only supported for houses"}, status=400)
+
+	if state == "connect":
+		for other_house in House.objects.filter(hardware_enabled=True).exclude(pk=node.pk):
+			other_house.hardware_enabled = False
+			other_house.save(update_fields=["hardware_enabled"])
+
+		if not node.hardware_enabled:
+			node.hardware_enabled = True
+			node.save(update_fields=["hardware_enabled"])
+
+		sync_house_output(
+			pin=node.arduino_pin,
+			is_on=node.power_active and node.status != "Offline",
+		)
+	else:
+		if node.hardware_enabled:
+			node.hardware_enabled = False
+			node.save(update_fields=["hardware_enabled"])
+
+	payload = _build_stream_payload()
+	payload["topology"] = _build_topology_response()
+	payload["boundHouseId"] = str(node.id) if node.hardware_enabled else None
+	payload["arduinoBindingState"] = state
 	return _json_cors_response(payload)
 
 

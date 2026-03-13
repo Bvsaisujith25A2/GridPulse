@@ -149,6 +149,22 @@ type NodePanel = {
   zIndex: number;
 };
 
+type BackendStreamPayload = {
+  statuses?: Record<string, unknown>;
+  nodes?: Record<
+    string,
+    {
+      status?: unknown;
+      parameters?: GridNodeData["parameters"];
+    }
+  >;
+  edges?: Record<string, StreamEdgeUpdate>;
+  topology?: {
+    nodes?: BackendNode[];
+    edges?: BackendEdge[];
+  };
+};
+
 const deckTypeOptions: Array<{ value: string; label: string }> = [
   { value: "powerPlant", label: "Power Plant" },
   { value: "gridSubstation", label: "Grid Substation" },
@@ -455,21 +471,7 @@ function App() {
     };
   };
 
-  const applyBackendPayload = (payload: {
-    statuses?: Record<string, unknown>;
-    nodes?: Record<
-      string,
-      {
-        status?: unknown;
-        parameters?: GridNodeData["parameters"];
-      }
-    >;
-    edges?: Record<string, StreamEdgeUpdate>;
-    topology?: {
-      nodes?: BackendNode[];
-      edges?: BackendEdge[];
-    };
-  }) => {
+  const applyBackendPayload = (payload: BackendStreamPayload) => {
     const isNodeStatus = (value: unknown): value is NodeStatus => {
       return value === "red" || value === "yellow" || value === "green";
     };
@@ -563,6 +565,48 @@ function App() {
     }
   };
 
+  const handleArduinoBinding = async (nodeId: string, state: "connect" | "disconnect") => {
+    const node = nodesById.get(nodeId);
+    if (!node || node.type !== "house") {
+      return;
+    }
+
+    setPendingNodeId(node.id);
+    setPanelMessages((current) => ({ ...current, [node.id]: "" }));
+
+    try {
+      const response = await fetch(
+        `${backendBaseUrl}/grid/nodes/${node.id}/arduino/?state=${state}`,
+        {
+          method: "POST"
+        }
+      );
+
+      const payload = (await response.json()) as BackendStreamPayload & { error?: string };
+
+      if (!response.ok) {
+        setPanelMessages((current) => ({
+          ...current,
+          [node.id]: payload.error ?? "Unable to update Arduino binding."
+        }));
+        return;
+      }
+
+      applyBackendPayload(payload);
+      setPanelMessages((current) => ({
+        ...current,
+        [node.id]: state === "connect" ? "Arduino connected to this house." : "Arduino disconnected from this house."
+      }));
+    } catch {
+      setPanelMessages((current) => ({
+        ...current,
+        [node.id]: "Arduino binding update failed."
+      }));
+    } finally {
+      setPendingNodeId(null);
+    }
+  };
+
   const handlePowerToggle = async (nodeId: string, state: "on" | "off") => {
     const node = nodesById.get(nodeId);
     if (!node) {
@@ -588,12 +632,7 @@ function App() {
         return;
       }
 
-      const payload = (await response.json()) as {
-        statuses?: Record<string, unknown>;
-        nodes?: Record<string, { status?: unknown; parameters?: GridNodeData["parameters"] }>;
-        edges?: Record<string, StreamEdgeUpdate>;
-        topology?: { nodes?: BackendNode[]; edges?: BackendEdge[] };
-      };
+      const payload = (await response.json()) as BackendStreamPayload;
 
       applyBackendPayload(payload);
       setPanelMessages((current) => ({
@@ -638,13 +677,7 @@ function App() {
         })
       });
 
-      const payload = (await response.json()) as {
-        error?: string;
-        statuses?: Record<string, unknown>;
-        nodes?: Record<string, { status?: unknown; parameters?: GridNodeData["parameters"] }>;
-        edges?: Record<string, StreamEdgeUpdate>;
-        topology?: { nodes?: BackendNode[]; edges?: BackendEdge[] };
-      };
+      const payload = (await response.json()) as BackendStreamPayload & { error?: string };
 
       if (!response.ok) {
         setDeckMessage(payload.error ?? "Unable to create node.");
@@ -693,21 +726,7 @@ function App() {
 
     stream.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as {
-          statuses?: Record<string, unknown>;
-          nodes?: Record<
-            string,
-            {
-              status?: unknown;
-              parameters?: GridNodeData["parameters"];
-            }
-          >;
-          edges?: Record<string, StreamEdgeUpdate>;
-          topology?: {
-            nodes?: BackendNode[];
-            edges?: BackendEdge[];
-          };
-        };
+        const payload = JSON.parse(event.data) as BackendStreamPayload;
 
         applyBackendPayload(payload);
       } catch {
@@ -989,6 +1008,8 @@ function App() {
           }
 
           const panelMessage = panelMessages[panel.nodeId];
+          const isHouseNode = panelNode.type === "house";
+          const isArduinoConnected = panelNode.data.parameters?.arduinoLink === "Connected";
 
           return (
             <div
@@ -1053,6 +1074,18 @@ function App() {
                 >
                   Clear
                 </button>
+                {isHouseNode && (
+                  <button
+                    className={`node-action-button ${isArduinoConnected ? "node-action-button-arduino-disconnect" : "node-action-button-arduino-connect"}`}
+                    type="button"
+                    disabled={pendingNodeId === panelNode.id}
+                    onClick={() => {
+                      void handleArduinoBinding(panelNode.id, isArduinoConnected ? "disconnect" : "connect");
+                    }}
+                  >
+                    {isArduinoConnected ? "Disconnect Arduino" : "Connect Arduino"}
+                  </button>
+                )}
               </div>
 
               {panelMessage && <div className="node-action-message">{panelMessage}</div>}

@@ -1,6 +1,8 @@
-from django.db import models
+from django.db import models, transaction
 import uuid
 import random
+
+from .arduino import sync_house_output
 
 
 class Category(models.Model):
@@ -276,18 +278,70 @@ class House(GridNode):
         null=True, blank=True,
         related_name='houses',
     )
+    hardware_enabled = models.BooleanField(default=False)
+    arduino_pin = models.PositiveSmallIntegerField(default=13)
 
     def save(self, *args, **kwargs):
+        previous_state = None
+        if self.pk:
+            previous_state = House.objects.filter(pk=self.pk).values(
+                'status',
+                'power_active',
+                'hardware_enabled',
+                'arduino_pin',
+            ).first()
         if not self.category_id:
             cat, _ = Category.objects.get_or_create(id='CAT-HS', defaults={'name': 'House'})
             self.category = cat
         parent_active = self.distribution_transformer.power_active if self.distribution_transformer_id else True
         self.power_active = (self.status != 'Offline') and parent_active
-        super().save(*args, **kwargs)
-        if self.distribution_transformer_id:
-            _sync_edge(self.distribution_transformer, self, 'SecondaryDistributionLine')
-        else:
-            _remove_edge(self)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            self._ensure_exclusive_hardware_binding()
+            if self.distribution_transformer_id:
+                _sync_edge(self.distribution_transformer, self, 'SecondaryDistributionLine')
+            else:
+                _remove_edge(self)
+        self._sync_hardware(previous_state)
+
+    def _ensure_exclusive_hardware_binding(self):
+        if not self.hardware_enabled:
+            return
+
+        for other_house in House.objects.filter(hardware_enabled=True).exclude(pk=self.pk):
+            other_house.hardware_enabled = False
+            other_house.save(update_fields=['hardware_enabled'])
+
+    def _sync_hardware(self, previous_state):
+        current_output_active = self.hardware_enabled and self.power_active and self.status != 'Offline'
+        previous_output_active = False
+        previous_pin = self.arduino_pin
+        previous_hardware_enabled = False
+
+        if previous_state is not None:
+            previous_output_active = (
+                previous_state['hardware_enabled']
+                and previous_state['power_active']
+                and previous_state['status'] != 'Offline'
+            )
+            previous_pin = previous_state['arduino_pin']
+            previous_hardware_enabled = previous_state['hardware_enabled']
+
+        should_sync = (
+            previous_state is None
+            or previous_output_active != current_output_active
+            or previous_pin != self.arduino_pin
+            or previous_hardware_enabled != self.hardware_enabled
+        )
+
+        if not should_sync:
+            return
+
+        sync_house_output(
+            pin=self.arduino_pin,
+            is_on=current_output_active,
+            flash_before_off=previous_output_active and not current_output_active,
+        )
 
     def generate_random_output(self):
         self.output = random.uniform(0.0, 5.0)

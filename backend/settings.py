@@ -124,3 +124,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+ARDUINO_ENABLED = True
+ARDUINO_SERIAL_PORT = 'COM8'
+ARDUINO_BAUD_RATE = 9600
+ARDUINO_TIMEOUT_SECONDS = 1.5
+ARDUINO_BOOT_DELAY_SECONDS = 2.0

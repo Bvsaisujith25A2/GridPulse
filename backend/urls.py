@@ -22,6 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('grid/topology/', grid_views.grid_topology, name='grid-topology'),
     path('grid/nodes/create/', grid_views.grid_node_create, name='grid-node-create'),
+    path('grid/nodes/<uuid:node_id>/arduino/', grid_views.grid_house_arduino_binding, name='grid-house-arduino-binding'),
     path('grid/nodes/<uuid:node_id>/power/', grid_views.grid_node_power, name='grid-node-power'),
     path('grid/snapshot/', grid_views.grid_status_snapshot, name='grid-status-snapshot'),
     path('grid/stream/', grid_views.grid_status_stream, name='grid-status-stream'),

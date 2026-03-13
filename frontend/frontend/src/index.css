@@ -414,6 +414,28 @@ body {
   border-color: #f8fafc;
 }
 
+.node-action-button-arduino-connect {
+  background: #7c3aed;
+  border-color: #ede9fe;
+  outline: 1px solid #7c3aed;
+}
+
+.node-action-button-arduino-connect:hover:not(:disabled) {
+  background: #6d28d9;
+  border-color: #f5f3ff;
+}
+
+.node-action-button-arduino-disconnect {
+  background: #0f766e;
+  border-color: #ccfbf1;
+  outline: 1px solid #0f766e;
+}
+
+.node-action-button-arduino-disconnect:hover:not(:disabled) {
+  background: #115e59;
+  border-color: #f0fdfa;
+}
+
 .node-action-button:disabled {
   opacity: 0.65;
   cursor: default;
