@@ -1,0 +1,61 @@
+﻿python : Creating test 
+database for alias 
+'default'...
+At line:1 char:1
++ python manage.py test 
+grid *>&1 | Out-File 
+-Encoding UTF8 test_out.tx 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (Cre  
+  ating test d...as 'def   
+ ault'...:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+
+.F..
+===========================
+===========================
+================
+FAIL: 
+test_graph_connections (gri
+d.tests.GridModelTests.test
+_graph_connections)
+---------------------------
+---------------------------
+----------------
+Traceback (most recent 
+call last):
+  File "D:\django\GridPulse
+\GridPulse\grid\tests.py", 
+line 50, in 
+test_graph_connections
+    self.assertEqual(pp.out
+going_edges.first().target,
+ tl)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^
+AssertionError: <GridNode: 
+[CAT-TL] Line 1 (af9f1889-c
+51f-4868-87c0-1b76c1b86581)
+> != <TransmissionLine: 
+[CAT-TL] Line 1 (af9f1889-c
+51f-4868-87c0-1b76c1b86581)
+>
+
+---------------------------
+---------------------------
+----------------
+Ran 4 tests in 0.010s
+
+FAILED (failures=1)
+Destroying test database 
+for alias 'default'...
+
+Found 4 test(s).
+System check identified no issues (0 silenced).
