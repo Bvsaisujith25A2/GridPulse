@@ -19,11 +19,7 @@ def remove_categories(apps, schema_editor):
     Category.objects.filter(id__in=[c[0] for c in CATEGORIES]).delete()
 
 class Migration(migrations.Migration):
-
-    dependencies = [
-        ('grid', '0001_initial'),
-    ]
-
+    dependencies = [('grid', '0001_initial')]
     operations = [
         migrations.RunPython(seed_categories, reverse_code=remove_categories),
     ]

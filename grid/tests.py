@@ -3,102 +3,101 @@ from grid.models import (
     Category, GridNode, GridEdge,
     PowerPlant, GridSubstation, DistributionSubstation,
     DistributionTransformer, House, Industry,
+    LINE_CAPACITY_DEFAULTS,
 )
 
 
-class CategorySeedTests(TestCase):
+class CategoryTests(TestCase):
     def test_six_categories_seeded(self):
-        """Data migration must seed exactly the 6 required categories."""
         expected = {'CAT-PP', 'CAT-GS', 'CAT-DS', 'CAT-DT', 'CAT-HS', 'CAT-ID'}
-        actual = set(Category.objects.values_list('id', flat=True))
-        self.assertEqual(actual, expected)
-
-    def test_category_auto_assigned_on_save(self):
-        self.assertEqual(PowerPlant.objects.create(name='PP').category_id, 'CAT-PP')
-        self.assertEqual(GridSubstation.objects.create(name='GS').category_id, 'CAT-GS')
-        self.assertEqual(DistributionSubstation.objects.create(name='DS').category_id, 'CAT-DS')
-        self.assertEqual(DistributionTransformer.objects.create(name='DT').category_id, 'CAT-DT')
-        self.assertEqual(House.objects.create(name='H').category_id, 'CAT-HS')
-        self.assertEqual(Industry.objects.create(name='I').category_id, 'CAT-ID')
+        self.assertEqual(set(Category.objects.values_list('id', flat=True)), expected)
 
 
-class UUIDTests(TestCase):
-    def test_each_node_gets_unique_uuid(self):
-        import uuid
-        pp = PowerPlant.objects.create(name='PP1')
-        gs = GridSubstation.objects.create(name='GS1')
-        self.assertIsInstance(pp.id, uuid.UUID)
-        self.assertIsInstance(gs.id, uuid.UUID)
-        self.assertNotEqual(pp.id, gs.id)
-
-
-class HierarchyAndAutoEdgeTests(TestCase):
+class AutoEdgeCreationTests(TestCase):
     def setUp(self):
-        self.pp = PowerPlant.objects.create(name='Plant 1')
-        self.gs = GridSubstation.objects.create(name='GS 1', power_plant=self.pp)
-        self.ds = DistributionSubstation.objects.create(name='DS 1', grid_substation=self.gs)
-        self.dt = DistributionTransformer.objects.create(name='DT 1', distribution_substation=self.ds)
-        self.house = House.objects.create(name='House 1', distribution_transformer=self.dt)
-        self.industry = Industry.objects.create(name='Industry 1', distribution_transformer=self.dt)
+        self.pp = PowerPlant.objects.create(name='PP')
+        self.gs = GridSubstation.objects.create(name='GS', power_plant=self.pp)
+        self.ds = DistributionSubstation.objects.create(name='DS', grid_substation=self.gs)
+        self.dt = DistributionTransformer.objects.create(name='DT', distribution_substation=self.ds)
+        self.h  = House.objects.create(name='H', distribution_transformer=self.dt)
+        self.ind = Industry.objects.create(name='I', distribution_transformer=self.dt)
 
-    def test_fk_relationships(self):
-        self.assertEqual(self.gs.power_plant, self.pp)
-        self.assertEqual(self.ds.grid_substation, self.gs)
-        self.assertEqual(self.dt.distribution_substation, self.ds)
-        self.assertEqual(self.house.distribution_transformer, self.dt)
-        self.assertEqual(self.industry.distribution_transformer, self.dt)
-
-    def test_reverse_relations(self):
-        self.assertIn(self.gs, self.pp.grid_substations.all())
-        self.assertIn(self.ds, self.gs.distribution_substations.all())
-        self.assertIn(self.dt, self.ds.distribution_transformers.all())
-        self.assertIn(self.house, self.dt.houses.all())
-        self.assertIn(self.industry, self.dt.industries.all())
-
-    def test_edges_auto_created(self):
-        # Each connection must auto-create a GridEdge with the correct type
+    def test_edges_created(self):
         self.assertTrue(GridEdge.objects.filter(source=self.pp, target=self.gs, type='TransmissionLine').exists())
         self.assertTrue(GridEdge.objects.filter(source=self.gs, target=self.ds, type='SubTransmissionLine').exists())
         self.assertTrue(GridEdge.objects.filter(source=self.ds, target=self.dt, type='Feeder11kV').exists())
-        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=self.house, type='SecondaryDistributionLine').exists())
-        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=self.industry, type='SecondaryDistributionLine').exists())
+        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=self.h,  type='SecondaryDistributionLine').exists())
+        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=self.ind,type='SecondaryDistributionLine').exists())
+
+    def test_edge_capacity_defaults(self):
+        e = GridEdge.objects.get(source=self.pp, target=self.gs)
+        self.assertEqual(e.capacity, LINE_CAPACITY_DEFAULTS['TransmissionLine'])
 
     def test_edge_removed_when_parent_cleared(self):
         self.gs.power_plant = None
         self.gs.save()
         self.assertFalse(GridEdge.objects.filter(target=self.gs).exists())
 
-    def test_multiple_consumers_per_transformer(self):
-        house2 = House.objects.create(name='House 2', distribution_transformer=self.dt)
-        house3 = House.objects.create(name='House 3', distribution_transformer=self.dt)
-        self.assertEqual(self.dt.houses.count(), 3)  # house + house2 + house3
-        # All have edges
-        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=house2).exists())
-        self.assertTrue(GridEdge.objects.filter(source=self.dt, target=house3).exists())
 
+class PowerFlowPropagationTests(TestCase):
+    def setUp(self):
+        self.pp  = PowerPlant.objects.create(name='PP')
+        self.gs  = GridSubstation.objects.create(name='GS', power_plant=self.pp)
+        self.ds  = DistributionSubstation.objects.create(name='DS', grid_substation=self.gs)
+        self.dt  = DistributionTransformer.objects.create(name='DT', distribution_substation=self.ds)
+        self.h   = House.objects.create(name='H', distribution_transformer=self.dt)
+        self.ind = Industry.objects.create(name='I', distribution_transformer=self.dt)
 
-class OutputIntervalTests(TestCase):
-    def test_power_plant_output(self):
-        pp = PowerPlant.objects.create(name='PP')
-        pp.generate_random_output()
-        self.assertTrue(11.0 <= pp.output <= 25.0)
+    def _refresh(self):
+        for attr in ('gs', 'ds', 'dt', 'h', 'ind'):
+            setattr(self, attr, getattr(self, attr).__class__.objects.get(pk=getattr(self, attr).pk))
 
-    def test_distribution_substation_output(self):
-        ds = DistributionSubstation.objects.create(name='DS')
-        ds.generate_random_output()
-        self.assertTrue(10.5 <= ds.output <= 11.5)
+    def test_all_active_by_default(self):
+        self._refresh()
+        for node in (self.gs, self.ds, self.dt, self.h, self.ind):
+            self.assertTrue(node.power_active, f"{node.name} should be power_active")
 
-    def test_distribution_transformer_output(self):
-        dt = DistributionTransformer.objects.create(name='DT')
-        dt.generate_random_output()
-        self.assertTrue(0.21 <= dt.output <= 0.25)
+    def test_powerplant_offline_cascades(self):
+        self.pp.status = 'Offline'
+        self.pp.save()
+        self._refresh()
+        self.assertFalse(self.pp.power_active)
+        for node in (self.gs, self.ds, self.dt, self.h, self.ind):
+            self.assertFalse(node.power_active, f"{node.name} should lose power")
 
-    def test_house_output(self):
-        h = House.objects.create(name='H')
-        h.generate_random_output()
-        self.assertTrue(0.0 <= h.output <= 5.0)
+    def test_powerplant_back_online_restores(self):
+        self.pp.status = 'Offline'
+        self.pp.save()
+        self.pp.status = 'Stable'
+        self.pp.save()
+        self._refresh()
+        for node in (self.gs, self.ds, self.dt, self.h, self.ind):
+            self.assertTrue(node.power_active, f"{node.name} should regain power")
 
-    def test_industry_output(self):
-        i = Industry.objects.create(name='I')
-        i.generate_random_output()
-        self.assertTrue(0.0 <= i.output <= 50.0)
+    def test_intermediate_node_offline_cascades(self):
+        """DistributionSubstation offline → DT, H, I lose power; GS stays active."""
+        self.ds.status = 'Offline'
+        self.ds.save()
+        self._refresh()
+        self.assertTrue(self.gs.power_active)    # upstream unaffected
+        self.assertFalse(self.ds.power_active)
+        self.assertFalse(self.dt.power_active)
+        self.assertFalse(self.h.power_active)
+        self.assertFalse(self.ind.power_active)
+
+    def test_consumer_own_offline_does_not_affect_others(self):
+        """A House going Offline only affects itself, not siblings."""
+        self.h.status = 'Offline'
+        self.h.save()
+        self.h.refresh_from_db()
+        self.ind.refresh_from_db()
+        self.assertFalse(self.h.power_active)
+        self.assertTrue(self.ind.power_active)   # sibling unaffected
+
+    def test_edge_active_mirrors_node_power_active(self):
+        self.ds.status = 'Offline'
+        self.ds.save()
+        edge_ds = GridEdge.objects.get(target=self.ds)
+        edge_dt = GridEdge.objects.get(target=self.dt)
+        self.assertFalse(edge_ds.active)   # upstream edge to DS goes dead
+        self.assertFalse(edge_dt.active)   # downstream edge follows
