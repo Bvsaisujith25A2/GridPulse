@@ -7,6 +7,7 @@ export type NodeParameters = Record<string, NodeParameterValue>;
 export type GridNodeData = {
   label?: string;
   status?: NodeStatus;
+  showLabel?: boolean;
   parameters?: NodeParameters;
 };
 

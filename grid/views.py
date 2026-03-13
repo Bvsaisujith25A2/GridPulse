@@ -103,6 +103,26 @@ def _get_concrete_node(node_id: str):
 	return model_class.objects.get(pk=node_id)
 
 
+TYPE_TO_CATEGORY = {
+	"powerPlant": "CAT-PP",
+	"gridSubstation": "CAT-GS",
+	"distributionSubstation": "CAT-DS",
+	"transformer": "CAT-DT",
+	"house": "CAT-HS",
+	"industry": "CAT-ID",
+}
+
+
+PARENT_RULES = {
+	"powerPlant": None,
+	"gridSubstation": "CAT-PP",
+	"distributionSubstation": "CAT-GS",
+	"transformer": "CAT-DS",
+	"house": "CAT-DT",
+	"industry": "CAT-DT",
+}
+
+
 def _is_edge_visually_active(edge: GridEdge) -> bool:
 	return _is_node_live(edge.source)
 
@@ -367,3 +387,70 @@ def grid_node_power(request, node_id):
 	payload["updatedNodeId"] = str(node.id)
 	payload["requestedState"] = state
 	return _json_cors_response(payload)
+
+
+@csrf_exempt
+def grid_node_create(request):
+	if request.method == "OPTIONS":
+		return _options_cors_response()
+
+	if request.method != "POST":
+		return _json_cors_response({"error": "Method not allowed"}, status=405)
+
+	try:
+		body = json.loads(request.body.decode("utf-8") or "{}")
+	except json.JSONDecodeError:
+		return _json_cors_response({"error": "Invalid JSON body"}, status=400)
+
+	node_name = str(body.get("name") or "").strip()
+	node_type = str(body.get("type") or "").strip()
+	parent_id = body.get("parentId")
+
+	if not node_name:
+		return _json_cors_response({"error": "name is required"}, status=400)
+
+	if node_type not in TYPE_TO_CATEGORY:
+		return _json_cors_response({"error": "Unsupported node type"}, status=400)
+
+	required_parent_category = PARENT_RULES[node_type]
+	parent_node = None
+	if required_parent_category is not None:
+		if not parent_id:
+			return _json_cors_response({"error": "parentId is required for this node type"}, status=400)
+		try:
+			parent_node = GridNode.objects.select_related("category").get(pk=str(parent_id))
+		except GridNode.DoesNotExist:
+			return _json_cors_response({"error": "Parent node not found"}, status=404)
+
+		if parent_node.category_id != required_parent_category:
+			return _json_cors_response({"error": "Invalid parent type for selected node type"}, status=400)
+
+	if node_type == "powerPlant":
+		created = PowerPlant.objects.create(name=node_name)
+	elif node_type == "gridSubstation":
+		created = GridSubstation.objects.create(name=node_name, power_plant=PowerPlant.objects.get(pk=parent_node.id))
+	elif node_type == "distributionSubstation":
+		created = DistributionSubstation.objects.create(
+			name=node_name,
+			grid_substation=GridSubstation.objects.get(pk=parent_node.id),
+		)
+	elif node_type == "transformer":
+		created = DistributionTransformer.objects.create(
+			name=node_name,
+			distribution_substation=DistributionSubstation.objects.get(pk=parent_node.id),
+		)
+	elif node_type == "house":
+		created = House.objects.create(
+			name=node_name,
+			distribution_transformer=DistributionTransformer.objects.get(pk=parent_node.id),
+		)
+	else:
+		created = Industry.objects.create(
+			name=node_name,
+			distribution_transformer=DistributionTransformer.objects.get(pk=parent_node.id),
+		)
+
+	payload = _build_stream_payload()
+	payload["topology"] = _build_topology_response()
+	payload["createdNodeId"] = str(created.id)
+	return _json_cors_response(payload, status=201)

@@ -5,6 +5,8 @@ export type LineEdgeData = {
   lineName: string;
   characteristic: string;
   isActive?: boolean;
+  highlighted?: boolean;
+  dimmed?: boolean;
   parameters?: NodeParameters;
 };
 
@@ -56,6 +58,8 @@ const Line = ({
   targetPosition
 }: EdgeProps<LineEdgeData>) => {
   const isActive = data?.isActive ?? data?.parameters?.active === "On";
+  const isHighlighted = data?.highlighted ?? false;
+  const isDimmed = data?.dimmed ?? false;
   const lineStyle = getLineStyle(data, isActive);
   const [path] = getBezierPath({
     sourceX,
@@ -73,17 +77,23 @@ const Line = ({
         id={id}
         path={path}
         style={{
-          stroke: isActive ? "#1fb6ff" : "#ff4d4f",
-          strokeWidth: lineStyle.strokeWidth,
-          strokeDasharray: lineStyle.strokeDasharray,
-          animation: isActive ? "unified-line-flow 0.9s linear infinite" : undefined,
-          filter: isActive
-            ? "drop-shadow(0 0 4px rgba(31, 182, 255, 0.9))"
-            : "drop-shadow(0 0 4px rgba(255, 77, 79, 0.75))"
+          stroke: isHighlighted ? "#ffffff" : isActive ? "#1fb6ff" : "#ff4d4f",
+          strokeWidth: isHighlighted ? lineStyle.strokeWidth + 1.6 : lineStyle.strokeWidth,
+          strokeDasharray: isHighlighted ? undefined : lineStyle.strokeDasharray,
+          opacity: isDimmed ? 0.15 : 1,
+          animation:
+            isHighlighted || isDimmed ? undefined : isActive ? "unified-line-flow 0.9s linear infinite" : undefined,
+          filter: isDimmed
+            ? "none"
+            : isHighlighted
+              ? "drop-shadow(0 0 8px rgba(255, 255, 255, 0.95))"
+              : isActive
+                ? "drop-shadow(0 0 4px rgba(31, 182, 255, 0.9))"
+                : "drop-shadow(0 0 4px rgba(255, 77, 79, 0.75))"
         }}
       />
       <path id={motionPathId} d={path} fill="none" stroke="transparent" />
-      {isActive && (
+      {isActive && !isDimmed && !isHighlighted && (
         <g className="unified-moving-arrow">
           <path d="M0,-7 L11,0 L0,7 Z" />
           <animateMotion dur="1.4s" repeatCount="indefinite" rotate="auto">

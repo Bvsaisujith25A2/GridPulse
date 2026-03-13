@@ -17,6 +17,7 @@ const HouseNode = ({ data }: NodeProps<GridNodeData>) => {
           height: "88px"
         }}
       />
+      {data?.showLabel && <div className="grid-node-label">{data?.label ?? "House"}</div>}
       <Handle type="source" position={Position.Right} />
     </div>
   );

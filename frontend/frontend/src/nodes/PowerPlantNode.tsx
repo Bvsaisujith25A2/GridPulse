@@ -14,6 +14,7 @@ const PowerPlantNode = ({ data }: NodeProps<GridNodeData>) => {
         className={statusClass}
         style={{ width: "88px", height: "88px" }}
       />
+      {data?.showLabel && <div className="grid-node-label">{data?.label ?? "Power Plant"}</div>}
       <Handle type="source" position={Position.Right} />
     </div>
   );
