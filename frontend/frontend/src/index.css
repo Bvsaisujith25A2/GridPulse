@@ -66,6 +66,150 @@ body {
   margin: 0;
 }
 
+:root {
+  --panel-electric-blue: #118dff;
+  --panel-lightning-yellow: #ffe45e;
+  --panel-white: #ffffff;
+  --panel-black: #000000;
+}
+
+.node-status-red {
+  filter: brightness(0) saturate(100%) invert(22%) sepia(96%) saturate(7417%) hue-rotate(356deg) brightness(98%) contrast(122%);
+}
+
+.node-status-yellow {
+  filter: brightness(0) saturate(100%) invert(86%) sepia(77%) saturate(911%) hue-rotate(356deg) brightness(104%) contrast(103%);
+}
+
+.node-status-green {
+  filter: brightness(0) saturate(100%) invert(62%) sepia(68%) saturate(702%) hue-rotate(78deg) brightness(94%) contrast(93%);
+}
+
+@keyframes unified-line-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+.unified-moving-arrow path {
+  fill: #1fb6ff;
+  filter: drop-shadow(0 0 6px rgba(31, 182, 255, 0.95));
+}
+
+.node-action-panel {
+  position: absolute;
+  z-index: 20;
+  transform: translateY(-100%);
+  background: var(--panel-black);
+  border: 1px solid var(--panel-lightning-yellow);
+  border-radius: 12px;
+  min-width: 280px;
+  padding: 14px;
+  text-align: left;
+  color: var(--panel-white);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--panel-lightning-yellow) 50%, transparent 50%), var(--shadow);
+}
+
+.node-action-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.node-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.node-action-close {
+  appearance: none;
+  border: 1px solid var(--panel-lightning-yellow);
+  background: color-mix(in srgb, var(--panel-lightning-yellow) 22%, transparent 78%);
+  color: var(--panel-white);
+  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.node-action-close:hover {
+  border-color: color-mix(in srgb, var(--panel-lightning-yellow) 85%, var(--panel-white) 15%);
+  background: color-mix(in srgb, var(--panel-lightning-yellow) 40%, transparent 60%);
+}
+
+.node-action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.node-action-button {
+  appearance: none;
+  border: 1px solid var(--panel-electric-blue);
+  background: color-mix(in srgb, var(--panel-electric-blue) 20%, transparent 80%);
+  color: var(--panel-white);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.node-action-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--panel-electric-blue) 70%, var(--panel-white) 30%);
+  background: color-mix(in srgb, var(--panel-electric-blue) 35%, transparent 65%);
+}
+
+.node-action-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.node-action-message {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--panel-lightning-yellow);
+}
+
+.node-parameters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--panel-lightning-yellow) 50%, transparent 50%);
+  padding-top: 10px;
+}
+
+.node-parameter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: color-mix(in srgb, var(--panel-lightning-yellow) 10%, var(--panel-black) 90%);
+  border: 1px solid color-mix(in srgb, var(--panel-lightning-yellow) 45%, transparent 55%);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.node-parameter-key {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--panel-lightning-yellow);
+}
+
+.node-parameter-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--panel-white);
+}
+
 h1,
 h2 {
   font-family: var(--heading);
