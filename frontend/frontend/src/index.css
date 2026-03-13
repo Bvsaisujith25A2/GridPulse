@@ -78,20 +78,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 20, 44, 0.75);
-  border: 1px solid rgba(69, 231, 255, 0.35);
-  border-radius: 18px;
-  padding: 12px;
-  box-shadow: var(--panel-shadow);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .gridpulse-logo {
   width: 80px;
   height: 80px;
-  border-radius: 14px;
+  border-radius: 10px;
   object-fit: cover;
-  border: 2px solid rgba(69, 231, 255, 0.45);
-  box-shadow: 0 0 18px rgba(19, 169, 255, 0.35);
+  border: none;
+  box-shadow: 0 0 12px rgba(19, 169, 255, 0.25);
 }
 
 .gridpulse-kicker {
@@ -145,10 +145,52 @@ body {
   gap: 8px;
 }
 
+.gridpulse-deck-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(69, 231, 255, 0.75);
+  background: rgba(8, 20, 44, 0.9);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.gridpulse-deck-close:hover {
+  background: rgba(19, 169, 255, 0.3);
+}
+
+.gridpulse-add-toggle {
+  position: absolute;
+  z-index: 15;
+  left: 28px;
+  top: 110px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(69, 231, 255, 0.7);
+  background: rgba(8, 20, 44, 0.85);
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(19, 169, 255, 0.25);
+}
+
+.gridpulse-add-toggle:hover {
+  background: rgba(19, 169, 255, 0.28);
+}
+
 .gridpulse-deck-title {
   font-family: var(--heading);
   color: var(--text-white);
   font-size: 16px;
+  margin-right: 34px;
 }
 
 .gridpulse-field-label {
@@ -450,6 +492,11 @@ body {
     width: min(280px, calc(100vw - 24px));
     left: 12px;
     top: 106px;
+  }
+
+  .gridpulse-add-toggle {
+    left: 16px;
+    top: 94px;
   }
 }
 

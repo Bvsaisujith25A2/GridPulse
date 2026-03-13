@@ -242,6 +242,7 @@ function App() {
   const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<Set<string>>(new Set());
   const [pendingNodeId, setPendingNodeId] = useState<string | null>(null);
   const [panelMessages, setPanelMessages] = useState<Record<string, string>>({});
+  const [isDeckOpen, setIsDeckOpen] = useState<boolean>(false);
   const [deckType, setDeckType] = useState<string>("gridSubstation");
   const [deckName, setDeckName] = useState<string>("");
   const [deckParentId, setDeckParentId] = useState<string>("");
@@ -782,7 +783,31 @@ function App() {
         </div>
       </div>
 
+      {!isDeckOpen && (
+        <button
+          className="gridpulse-add-toggle"
+          type="button"
+          onClick={() => {
+            setIsDeckOpen(true);
+          }}
+          aria-label="Open add resource"
+        >
+          +
+        </button>
+      )}
+
+      {isDeckOpen && (
       <aside className="gridpulse-deck">
+        <button
+          className="gridpulse-deck-close"
+          type="button"
+          onClick={() => {
+            setIsDeckOpen(false);
+          }}
+          aria-label="Close add resource"
+        >
+          -
+        </button>
         <div className="gridpulse-deck-title">Node Deck</div>
         <label className="gridpulse-field-label" htmlFor="deck-node-type">
           Module Type
@@ -880,6 +905,7 @@ function App() {
 
         {deckMessage && <div className="gridpulse-deck-message">{deckMessage}</div>}
       </aside>
+      )}
 
       <div className="gridpulse-canvas-wrap">
       <ReactFlow
