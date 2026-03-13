@@ -22,7 +22,8 @@ const nodeTypes = {
   gridSubstation: GridSubstationNode,
   distributionSubstation: DistributionSubstationNode,
   transformer: TransformerNode,
-  house: HouseNode
+  house: HouseNode,
+  industry: HouseNode
 };
 
 const edgeTypes: EdgeTypes = {
@@ -69,6 +70,16 @@ const lineRelationMap: Record<string, LineEdgeData> = {
       output: "Houses / Industries",
       voltage: "415 / 230 V"
     }
+  },
+  "transformer->industry": {
+    lineName: "Secondary Distribution Lines",
+    characteristic: "Low Voltage Industrial Delivery",
+    parameters: {
+      category: "Secondary Distribution",
+      input: "Transformer LT Side",
+      output: "Industries",
+      voltage: "415 / 230 V"
+    }
   }
 };
 
@@ -102,125 +113,88 @@ const getOrderedParameters = (parameters?: GridNodeData["parameters"]) => {
   return [...orderedCommon, ...remaining];
 };
 
-const initialNodes: Node<GridNodeData>[] = [
-  {
-    id: "1",
-    position: { x: 100, y: 100 },
-    data: {
-      label: "Power Plant",
-      status: "red",
-      parameters: {
-        category: "Generation",
-        input: "Fuel / Steam",
-        output: "High-voltage Power",
-        capacityMW: 520
-      }
-    },
-    type: "powerPlant"
-  },
-  {
-    id: "2",
-    position: { x: 300, y: 100 },
-    data: {
-      label: "Grid Substation",
-      status: "red",
-      parameters: {
-        category: "Transmission",
-        input: "220kV",
-        output: "132kV",
-        breakerState: "Closed"
-      }
-    },
-    type: "gridSubstation"
-  },
-  {
-    id: "3",
-    position: { x: 500, y: 100 },
-    data: {
-      label: "Distribution Substation",
-      status: "red",
-      parameters: {
-        category: "Distribution",
-        input: "132kV",
-        output: "33kV",
-        feederCount: 12
-      }
-    },
-    type: "distributionSubstation"
-  },
-  {
-    id: "4",
-    position: { x: 700, y: 100 },
-    data: {
-      label: "Transformer",
-      status: "red",
-      parameters: {
-        category: "Conversion",
-        input: "33kV",
-        output: "11kV",
-        loadPercent: 71
-      }
-    },
-    type: "transformer"
-  },
-  {
-    id: "5",
-    position: { x: 900, y: 100 },
-    data: {
-      label: "House",
-      status: "red",
-      parameters: {
-        category: "Consumer",
-        input: "11kV",
-        output: "Usage",
-        demandKW: 4.5
-      }
-    },
-    type: "house"
-  }
-];
+type BackendNode = {
+  id: string;
+  label: string;
+  type: string;
+  position: { x: number; y: number };
+};
 
-const initialEdges: Edge<LineEdgeData>[] = [
-  {
-    id: "e1-2",
-    source: "1",
-    target: "2",
-    type: "unifiedLine",
-    data: lineRelationMap["powerPlant->gridSubstation"],
-    animated: true
-  },
-  {
-    id: "e2-3",
-    source: "2",
-    target: "3",
-    type: "unifiedLine",
-    data: lineRelationMap["gridSubstation->distributionSubstation"],
-    animated: true
-  },
-  {
-    id: "e3-4",
-    source: "3",
-    target: "4",
-    type: "unifiedLine",
-    data: lineRelationMap["distributionSubstation->transformer"],
-    animated: true
-  },
-  {
-    id: "e4-5",
-    source: "4",
-    target: "5",
-    type: "unifiedLine",
-    data: lineRelationMap["transformer->house"],
-    animated: true
+type BackendEdge = {
+  id: string;
+  source: string;
+  target: string;
+  data?: LineEdgeData;
+};
+
+type StreamEdgeUpdate = {
+  lineName?: string;
+  characteristic?: string;
+  isActive?: boolean;
+  parameters?: GridNodeData["parameters"];
+};
+
+const toReactFlowNodeType = (value: string): Node["type"] => {
+  if (value in nodeTypes) {
+    return value as Node["type"];
   }
-];
+  return "house";
+};
+
+const toReactFlowNodes = (backendNodes: BackendNode[]): Node<GridNodeData>[] => {
+  return backendNodes.map((node) => ({
+    id: node.id,
+    type: toReactFlowNodeType(node.type),
+    position: node.position,
+    data: {
+      label: node.label,
+      status: "red",
+      parameters: {
+        category: "Loading",
+        input: "--",
+        output: "--"
+      }
+    }
+  }));
+};
+
+const toReactFlowEdges = (
+  backendEdges: BackendEdge[],
+  reactNodes: Node<GridNodeData>[]
+): Edge<LineEdgeData>[] => {
+  return backendEdges.map((edge) => {
+    const sourceNode = reactNodes.find((node) => node.id === edge.source);
+    const targetNode = reactNodes.find((node) => node.id === edge.target);
+    const fallback = getLineRelation(sourceNode?.type, targetNode?.type) ?? {
+      lineName: "Grid Line",
+      characteristic: "Power Transfer",
+      parameters: {
+        category: "Grid",
+        input: sourceNode?.data?.label ?? "Source",
+        output: targetNode?.data?.label ?? "Target"
+      }
+    };
+
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: "unifiedLine",
+      data: edge.data ?? fallback,
+      animated: edge.data?.isActive ?? true
+    };
+  });
+};
 
 function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<LineEdgeData>(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<LineEdgeData>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [panelPosition, setPanelPosition] = useState({ x: 16, y: 16 });
+  const [pendingNodeId, setPendingNodeId] = useState<string | null>(null);
+  const [panelMessage, setPanelMessage] = useState<string | null>(null);
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) {
@@ -243,68 +217,208 @@ function App() {
     setPanelPosition({ x: nextX, y: nextY });
   };
 
-  useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(`${protocol}://${window.location.host}/ws/grid-status/`);
-
+  const applyBackendPayload = (payload: {
+    statuses?: Record<string, unknown>;
+    nodes?: Record<
+      string,
+      {
+        status?: unknown;
+        parameters?: GridNodeData["parameters"];
+      }
+    >;
+    edges?: Record<string, StreamEdgeUpdate>;
+    topology?: {
+      nodes?: BackendNode[];
+      edges?: BackendEdge[];
+    };
+  }) => {
     const isNodeStatus = (value: unknown): value is NodeStatus => {
       return value === "red" || value === "yellow" || value === "green";
     };
 
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data) as {
-          id?: string | number;
-          nodeId?: string | number;
-          status?: unknown;
-          statuses?: Record<string, unknown>;
-        };
+    const nextStatuses: Record<string, NodeStatus> = {};
+    const nextParameters: Record<string, GridNodeData["parameters"]> = {};
+    const nextEdges: Record<string, StreamEdgeUpdate> = {};
 
-        const nextStatuses: Record<string, NodeStatus> = {};
+    if (payload.statuses && typeof payload.statuses === "object") {
+      Object.entries(payload.statuses).forEach(([nodeId, status]) => {
+        if (isNodeStatus(status)) {
+          nextStatuses[nodeId] = status;
+        }
+      });
+    }
 
-        if (payload.statuses && typeof payload.statuses === "object") {
-          Object.entries(payload.statuses).forEach(([nodeId, status]) => {
-            if (isNodeStatus(status)) {
-              nextStatuses[nodeId] = status;
+    if (payload.nodes && typeof payload.nodes === "object") {
+      Object.entries(payload.nodes).forEach(([nodeId, nodeData]) => {
+        if (isNodeStatus(nodeData?.status)) {
+          nextStatuses[nodeId] = nodeData.status;
+        }
+
+        if (nodeData?.parameters && typeof nodeData.parameters === "object") {
+          nextParameters[nodeId] = nodeData.parameters;
+        }
+      });
+    }
+
+    if (payload.edges && typeof payload.edges === "object") {
+      Object.entries(payload.edges).forEach(([edgeId, edgeData]) => {
+        nextEdges[edgeId] = edgeData;
+      });
+    }
+
+    if (payload.topology?.nodes && payload.topology?.edges) {
+      const nextNodes = toReactFlowNodes(payload.topology.nodes);
+      const nextEdgesList = toReactFlowEdges(payload.topology.edges, nextNodes);
+      setNodes(nextNodes);
+      setEdges(nextEdgesList);
+    }
+
+    if (Object.keys(nextStatuses).length > 0 || Object.keys(nextParameters).length > 0) {
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const nextStatus = nextStatuses[node.id];
+          const nextNodeParameters = nextParameters[node.id];
+          const hasStatusChange = !!nextStatus && node.data.status !== nextStatus;
+          const hasParameterChange = !!nextNodeParameters;
+
+          if (!hasStatusChange && !hasParameterChange) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ...(hasStatusChange ? { status: nextStatus } : {}),
+              ...(hasParameterChange ? { parameters: nextNodeParameters } : {}),
             }
-          });
-        }
+          };
+        })
+      );
+    }
 
-        const singleNodeId = payload.nodeId ?? payload.id;
-        if (singleNodeId !== undefined && isNodeStatus(payload.status)) {
-          nextStatuses[String(singleNodeId)] = payload.status;
-        }
+    if (Object.keys(nextEdges).length > 0) {
+      setEdges((currentEdges) =>
+        currentEdges.map((edge) => {
+          const nextEdge = nextEdges[edge.id];
+          if (!nextEdge) {
+            return edge;
+          }
 
-        if (Object.keys(nextStatuses).length === 0) {
+          const nextLineName = nextEdge.lineName ?? edge.data?.lineName ?? "Grid Line";
+          const nextCharacteristic =
+            nextEdge.characteristic ?? edge.data?.characteristic ?? "Power Transfer";
+
+          return {
+            ...edge,
+            animated: nextEdge.isActive ?? edge.animated,
+            data: {
+              lineName: nextLineName,
+              characteristic: nextCharacteristic,
+              ...edge.data,
+              ...(nextEdge.isActive !== undefined ? { isActive: nextEdge.isActive } : {}),
+              ...(nextEdge.parameters ? { parameters: nextEdge.parameters } : {}),
+            }
+          };
+        })
+      );
+    }
+  };
+
+  const handlePowerToggle = async (state: "on" | "off") => {
+    if (!selectedNode) {
+      return;
+    }
+
+    setPendingNodeId(selectedNode.id);
+    setPanelMessage(null);
+
+    try {
+      const response = await fetch(
+        `${backendBaseUrl}/grid/nodes/${selectedNode.id}/power/?state=${state}`,
+        {
+          method: "POST"
+        }
+      );
+
+      if (!response.ok) {
+        setPanelMessage("Unable to update node power state.");
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        statuses?: Record<string, unknown>;
+        nodes?: Record<string, { status?: unknown; parameters?: GridNodeData["parameters"] }>;
+        edges?: Record<string, StreamEdgeUpdate>;
+        topology?: { nodes?: BackendNode[]; edges?: BackendEdge[] };
+      };
+
+      applyBackendPayload(payload);
+      setPanelMessage(state === "on" ? "Node switched on." : "Node switched off.");
+    } catch {
+      setPanelMessage("Backend update failed.");
+    } finally {
+      setPendingNodeId(null);
+    }
+  };
+
+  useEffect(() => {
+    const loadTopology = async () => {
+      try {
+        const response = await fetch(`${backendBaseUrl}/grid/topology/`);
+        if (!response.ok) {
           return;
         }
 
-        setNodes((currentNodes) =>
-          currentNodes.map((node) => {
-            const nextStatus = nextStatuses[node.id];
+        const payload = (await response.json()) as {
+          nodes?: BackendNode[];
+          edges?: BackendEdge[];
+        };
 
-            if (!nextStatus || node.data.status === nextStatus) {
-              return node;
+        const backendNodes = payload.nodes ?? [];
+        const backendEdges = payload.edges ?? [];
+        const nextNodes = toReactFlowNodes(backendNodes);
+        const nextEdges = toReactFlowEdges(backendEdges, nextNodes);
+
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+      } catch {
+        return;
+      }
+    };
+
+    void loadTopology();
+
+    const stream = new EventSource(`${backendBaseUrl}/grid/stream/`);
+
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as {
+          statuses?: Record<string, unknown>;
+          nodes?: Record<
+            string,
+            {
+              status?: unknown;
+              parameters?: GridNodeData["parameters"];
             }
+          >;
+          edges?: Record<string, StreamEdgeUpdate>;
+          topology?: {
+            nodes?: BackendNode[];
+            edges?: BackendEdge[];
+          };
+        };
 
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                status: nextStatus
-              }
-            };
-          })
-        );
+        applyBackendPayload(payload);
       } catch {
         return;
       }
     };
 
     return () => {
-      socket.close();
+      stream.close();
     };
-  }, [setNodes]);
+  }, [backendBaseUrl, setEdges, setNodes]);
 
   return (
     <div ref={containerRef} style={{ width: "100%", height: "100vh", position: "relative" }}>
@@ -378,6 +492,31 @@ function App() {
               ✕
             </button>
           </div>
+
+          <div className="node-action-buttons">
+            <button
+              className="node-action-button node-action-button-on"
+              type="button"
+              disabled={pendingNodeId === selectedNode.id || selectedNode.data.parameters?.powerActive === "On"}
+              onClick={() => {
+                void handlePowerToggle("on");
+              }}
+            >
+              On
+            </button>
+            <button
+              className="node-action-button node-action-button-off"
+              type="button"
+              disabled={pendingNodeId === selectedNode.id || selectedNode.data.parameters?.powerActive === "Off"}
+              onClick={() => {
+                void handlePowerToggle("off");
+              }}
+            >
+              Off
+            </button>
+          </div>
+
+          {panelMessage && <div className="node-action-message">{panelMessage}</div>}
 
           <div className="node-parameters-list">
             {getOrderedParameters(selectedNode.data.parameters).map(([key, value]) => (

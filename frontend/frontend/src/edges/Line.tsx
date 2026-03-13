@@ -4,11 +4,50 @@ import { type NodeParameters } from "../nodes/nodeStatus";
 export type LineEdgeData = {
   lineName: string;
   characteristic: string;
+  isActive?: boolean;
   parameters?: NodeParameters;
+};
+
+const getLineStyle = (edgeData?: LineEdgeData, isActive?: boolean) => {
+  const category = String(edgeData?.parameters?.category ?? "");
+
+  if (category === "TransmissionLine" || category === "Transmission") {
+    return {
+      strokeWidth: 6,
+      strokeDasharray: undefined
+    };
+  }
+
+  if (category === "SubTransmissionLine" || category === "Sub-Transmission") {
+    return {
+      strokeWidth: 4.8,
+      strokeDasharray: isActive ? "14 7" : "10 8"
+    };
+  }
+
+  if (category === "Feeder11kV" || category === "Primary Distribution") {
+    return {
+      strokeWidth: 3.8,
+      strokeDasharray: isActive ? "10 8" : "8 7"
+    };
+  }
+
+  if (category === "SecondaryDistributionLine" || category === "Secondary Distribution") {
+    return {
+      strokeWidth: 2.8,
+      strokeDasharray: isActive ? "7 7" : "6 7"
+    };
+  }
+
+  return {
+    strokeWidth: 2.2,
+    strokeDasharray: isActive ? "6 8" : "5 8"
+  };
 };
 
 const Line = ({
   id,
+  data,
   sourceX,
   sourceY,
   targetX,
@@ -16,6 +55,8 @@ const Line = ({
   sourcePosition,
   targetPosition
 }: EdgeProps<LineEdgeData>) => {
+  const isActive = data?.isActive ?? data?.parameters?.active === "On";
+  const lineStyle = getLineStyle(data, isActive);
   const [path] = getBezierPath({
     sourceX,
     sourceY,
@@ -32,20 +73,24 @@ const Line = ({
         id={id}
         path={path}
         style={{
-          stroke: "#1fb6ff",
-          strokeWidth: 3,
-          strokeDasharray: "10 8",
-          animation: "unified-line-flow 0.9s linear infinite",
-          filter: "drop-shadow(0 0 4px rgba(31, 182, 255, 0.9))"
+          stroke: isActive ? "#1fb6ff" : "#ff4d4f",
+          strokeWidth: lineStyle.strokeWidth,
+          strokeDasharray: lineStyle.strokeDasharray,
+          animation: isActive ? "unified-line-flow 0.9s linear infinite" : undefined,
+          filter: isActive
+            ? "drop-shadow(0 0 4px rgba(31, 182, 255, 0.9))"
+            : "drop-shadow(0 0 4px rgba(255, 77, 79, 0.75))"
         }}
       />
       <path id={motionPathId} d={path} fill="none" stroke="transparent" />
-      <g className="unified-moving-arrow">
-        <path d="M0,-7 L11,0 L0,7 Z" />
-        <animateMotion dur="1.4s" repeatCount="indefinite" rotate="auto">
-          <mpath href={`#${motionPathId}`} />
-        </animateMotion>
-      </g>
+      {isActive && (
+        <g className="unified-moving-arrow">
+          <path d="M0,-7 L11,0 L0,7 Z" />
+          <animateMotion dur="1.4s" repeatCount="indefinite" rotate="auto">
+            <mpath href={`#${motionPathId}`} />
+          </animateMotion>
+        </g>
+      )}
     </>
   );
 };
