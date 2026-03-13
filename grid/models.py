@@ -2,18 +2,32 @@ from django.db import models
 import uuid
 import random
 
+
 class Category(models.Model):
+    """
+    Unique category for each of the 6 canvas node types.
+    Category IDs: CAT-PP, CAT-GS, CAT-DS, CAT-DT, CAT-HS, CAT-ID
+    """
     id = models.CharField(max_length=50, primary_key=True)
     name = models.CharField(max_length=100)
 
+    class Meta:
+        verbose_name_plural = "Categories"
+
     def __str__(self):
-        return self.name
+        return f"{self.id}: {self.name}"
+
 
 class GridNode(models.Model):
+    """
+    Base model for all grid entities.
+    Each resource gets a globally unique UUID.
+    'demand', 'input', 'output' represent current electrical flow values.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='nodes')
     name = models.CharField(max_length=100)
-    
+
     STATUS_CHOICES = [
         ('Stable', 'Stable'),
         ('Warning', 'Warning'),
@@ -21,36 +35,53 @@ class GridNode(models.Model):
         ('Offline', 'Offline'),
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Stable')
-    
+
     demand = models.FloatField(default=0.0, help_text="Current demand/load")
-    input = models.FloatField(default=0.0, help_text="Current input flow")
-    output = models.FloatField(default=0.0, help_text="Current output flow")
+    input = models.FloatField(default=0.0, help_text="Current input flow (kV or kW)")
+    output = models.FloatField(default=0.0, help_text="Current output flow (kV or kW)")
 
     def __str__(self):
-        return f"[{self.category_id}] {self.name} ({self.id})"
+        return f"[{self.category_id}] {self.name}"
+
 
 class GridEdge(models.Model):
+    """
+    Represents lines/connections between nodes on the React Flow canvas.
+    Lines are NOT categories — they are edges connecting GridNode instances.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    source = models.ForeignKey(GridNode, on_delete=models.CASCADE, related_name='outgoing_edges', help_text="Connection Input (ci) node")
-    target = models.ForeignKey(GridNode, on_delete=models.CASCADE, related_name='incoming_edges', help_text="Connection Output (co) node")
-    
-    TYPE_CHOICES = [
-        ('TransmissionLine', 'TransmissionLine'),
-        ('SubTransmissionLine', 'SubTransmissionLine'),
-        ('Feeder11kV', 'Feeder11kV'),
-        ('SecondaryDistributionLine', 'SecondaryDistributionLine'),
-        ('ServiceLine', 'ServiceLine'),
+    source = models.ForeignKey(
+        GridNode, on_delete=models.CASCADE,
+        related_name='outgoing_edges',
+        help_text="Connection Input (ci): upstream node"
+    )
+    target = models.ForeignKey(
+        GridNode, on_delete=models.CASCADE,
+        related_name='incoming_edges',
+        help_text="Connection Output (co): downstream node"
+    )
+
+    LINE_TYPE_CHOICES = [
+        ('TransmissionLine', 'Transmission Line'),
+        ('SubTransmissionLine', 'Sub-Transmission Line'),
+        ('Feeder11kV', '11 kV Feeder'),
+        ('SecondaryDistributionLine', 'Secondary Distribution Line'),
+        ('ServiceLine', 'Service Line'),
     ]
-    type = models.CharField(max_length=50, choices=TYPE_CHOICES)
-    capacity = models.FloatField(default=100.0, help_text="Maximum flow capacity")
+    type = models.CharField(max_length=50, choices=LINE_TYPE_CHOICES)
+    capacity = models.FloatField(default=100.0, help_text="Max flow capacity (kW)")
 
     def __str__(self):
-        return f"{self.source.name} -> {self.target.name} ({self.type})"
+        return f"{self.source.name} → {self.target.name} [{self.type}]"
 
 
-# The 6 Specific Node Types
+# ──────────────────────────────────────────────
+# The 6 Canvas Node Models (Category: CAT-XX)
+# ──────────────────────────────────────────────
 
 class PowerPlant(GridNode):
+    """Category: CAT-PP | Output interval: 11–25 kV"""
+
     def save(self, *args, **kwargs):
         if not self.category_id:
             cat, _ = Category.objects.get_or_create(id='CAT-PP', defaults={'name': 'Power Plant'})
@@ -58,18 +89,14 @@ class PowerPlant(GridNode):
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-        # 11-25 kV random generation
+        """Generates a random output in the 11–25 kV range."""
         self.output = random.uniform(11.0, 25.0)
         self.save()
 
-class TransmissionLine(GridNode):
-    def save(self, *args, **kwargs):
-        if not self.category_id:
-            cat, _ = Category.objects.get_or_create(id='CAT-TL', defaults={'name': 'Transmission Line'})
-            self.category = cat
-        super().save(*args, **kwargs)
 
 class GridSubstation(GridNode):
+    """Category: CAT-GS | Reduces incoming HV to sub-transmission voltage."""
+
     def save(self, *args, **kwargs):
         if not self.category_id:
             cat, _ = Category.objects.get_or_create(id='CAT-GS', defaults={'name': 'Grid Substation'})
@@ -77,54 +104,44 @@ class GridSubstation(GridNode):
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-         # Reducer voltage example
-         # Depending on the incoming voltage, the output varies. For now using placeholder logic.
-         if self.input > 0:
+        if self.input > 0:
             self.output = self.input * random.uniform(0.8, 0.95)
-         self.save()
+        self.save()
 
-class SubTransmissionLine(GridNode):
+
+class DistributionSubstation(GridNode):
+    """Category: CAT-DS | Reduces 33 kV → 11 kV."""
+
     def save(self, *args, **kwargs):
         if not self.category_id:
-            cat, _ = Category.objects.get_or_create(id='CAT-STL', defaults={'name': 'Sub-Transmission Line'})
+            cat, _ = Category.objects.get_or_create(id='CAT-DS', defaults={'name': 'Distribution Substation'})
             self.category = cat
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-        # 132 / 66 / 33 kV
-        self.output = random.choice([132.0, 66.0, 33.0])
+        """Output interval: ~11 kV (±0.5 kV)"""
+        self.output = 11.0 + random.uniform(-0.5, 0.5)
         self.save()
 
 
+class DistributionTransformer(GridNode):
+    """Category: CAT-DT | Steps down 11 kV → 415/230 V."""
 
-class Feeder11kV(GridNode):
     def save(self, *args, **kwargs):
         if not self.category_id:
-            cat, _ = Category.objects.get_or_create(id='CAT-F11', defaults={'name': '11 kV Feeder'})
+            cat, _ = Category.objects.get_or_create(id='CAT-DT', defaults={'name': 'Distribution Transformer'})
             self.category = cat
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-        self.output = 11.0 + random.uniform(-0.1, 0.1)
+        """Output: 0.23 kV (230 V) ± noise"""
+        self.output = 0.23 + random.uniform(-0.01, 0.01)
         self.save()
 
-
-
-class SecondaryDistributionLine(GridNode):
-    def save(self, *args, **kwargs):
-        if not self.category_id:
-            cat, _ = Category.objects.get_or_create(id='CAT-SDL', defaults={'name': 'Secondary Distribution Line'})
-            self.category = cat
-        super().save(*args, **kwargs)
-
-class ServiceLine(GridNode):
-    def save(self, *args, **kwargs):
-        if not self.category_id:
-            cat, _ = Category.objects.get_or_create(id='CAT-SL', defaults={'name': 'Service Line'})
-            self.category = cat
-        super().save(*args, **kwargs)
 
 class House(GridNode):
+    """Category: CAT-HS | Residential consumer / prosumer node."""
+
     def save(self, *args, **kwargs):
         if not self.category_id:
             cat, _ = Category.objects.get_or_create(id='CAT-HS', defaults={'name': 'House'})
@@ -132,12 +149,14 @@ class House(GridNode):
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-        # Houses generally have demand but may have solar output
-        self.output = random.uniform(0.0, 5.0) # kW
+        """Output: 0–5 kW (solar generation potential)"""
+        self.output = random.uniform(0.0, 5.0)
         self.save()
 
 
 class Industry(GridNode):
+    """Category: CAT-ID | Industrial consumer node."""
+
     def save(self, *args, **kwargs):
         if not self.category_id:
             cat, _ = Category.objects.get_or_create(id='CAT-ID', defaults={'name': 'Industry'})
@@ -145,6 +164,6 @@ class Industry(GridNode):
         super().save(*args, **kwargs)
 
     def generate_random_output(self):
-        # Industries have high demand
-        self.output = random.uniform(0.0, 50.0) # kW
+        """Output: 0–50 kW"""
+        self.output = random.uniform(0.0, 50.0)
         self.save()

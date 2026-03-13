@@ -1,19 +1,23 @@
 from django.contrib import admin
 from .models import (
-    Category, GridNode, GridEdge, PowerPlant, TransmissionLine,
-    GridSubstation, SubTransmissionLine, Feeder11kV,
-    SecondaryDistributionLine, ServiceLine, House, Industry
+    Category, GridNode, GridEdge,
+    PowerPlant, GridSubstation, DistributionSubstation,
+    DistributionTransformer, House, Industry
 )
+
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('id', 'name')
+    ordering = ('id',)
+
 
 @admin.register(GridNode)
 class GridNodeAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'id', 'status', 'demand', 'input', 'output')
     list_filter = ('category', 'status')
-    search_fields = ('name', 'id')
+    search_fields = ('name',)
+
 
 @admin.register(GridEdge)
 class GridEdgeAdmin(admin.ModelAdmin):
@@ -21,19 +25,19 @@ class GridEdgeAdmin(admin.ModelAdmin):
     list_filter = ('type',)
     search_fields = ('source__name', 'target__name')
 
-# Registering specific node types with the same base display
-class SpecificNodeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'status', 'input', 'output')
+
+# ── The 6 Canvas Node Types ──────────────────────────────────────
+
+class NodeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'status', 'input', 'output', 'demand')
     list_filter = ('status',)
     search_fields = ('name',)
+    readonly_fields = ('id', 'category')
 
-admin.site.register(PowerPlant, SpecificNodeAdmin)
-admin.site.register(TransmissionLine, SpecificNodeAdmin)
-admin.site.register(GridSubstation, SpecificNodeAdmin)
-admin.site.register(SubTransmissionLine, SpecificNodeAdmin)
-admin.site.register(Feeder11kV, SpecificNodeAdmin)
-admin.site.register(SecondaryDistributionLine, SpecificNodeAdmin)
-admin.site.register(ServiceLine, SpecificNodeAdmin)
-admin.site.register(House, SpecificNodeAdmin)
-admin.site.register(Industry, SpecificNodeAdmin)
 
+admin.site.register(PowerPlant, NodeAdmin)
+admin.site.register(GridSubstation, NodeAdmin)
+admin.site.register(DistributionSubstation, NodeAdmin)
+admin.site.register(DistributionTransformer, NodeAdmin)
+admin.site.register(House, NodeAdmin)
+admin.site.register(Industry, NodeAdmin)
