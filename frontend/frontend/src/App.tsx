@@ -775,8 +775,6 @@ function App() {
       <div className="gridpulse-hud">
         <div className="gridpulse-title-wrap">
           <img src={gridPulseLogo} alt="GridPulse" className="gridpulse-logo" />
-          <div className="gridpulse-kicker">National Grid Console</div>
-          <div className="gridpulse-title">GridPulse Live Map</div>
         </div>
         <div className="gridpulse-status-wrap">
           <span className="gridpulse-chip">Zoom {zoomLabel}</span>

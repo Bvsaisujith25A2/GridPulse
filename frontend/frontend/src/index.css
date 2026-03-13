@@ -77,20 +77,21 @@ body {
 .gridpulse-title-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   background: rgba(8, 20, 44, 0.75);
   border: 1px solid rgba(69, 231, 255, 0.35);
-  border-radius: 14px;
-  padding: 10px 14px;
+  border-radius: 18px;
+  padding: 12px;
   box-shadow: var(--panel-shadow);
 }
 
 .gridpulse-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 80px;
+  height: 80px;
+  border-radius: 14px;
   object-fit: cover;
-  border: 1px solid rgba(69, 231, 255, 0.35);
+  border: 2px solid rgba(69, 231, 255, 0.45);
+  box-shadow: 0 0 18px rgba(19, 169, 255, 0.35);
 }
 
 .gridpulse-kicker {
